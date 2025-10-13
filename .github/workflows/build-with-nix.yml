@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: vedderb/vesc_tool
-          ref: release_6.06
+          ref: release_6_06
           fetch-depth: 0
 
       - name: Install Nix
@@ -100,7 +100,7 @@ jobs:
 
           # Helpful README
           cat > dist/README.txt <<'EOF'
-            This artifact was built with Nix (flake.nix) from vedderb/vesc_tool@release_6.06.
+            This artifact was built with Nix (flake.nix) from vedderb/vesc_tool@release_6_06.
             Contents are the flake's build output. If you see a 'bin/vesc_tool*' executable,
             run it from the unpacked directory.
             EOF
@@ -127,7 +127,7 @@ jobs:
         with:
           files: dist/**/*.*
           body: |
-            Automated Nix flake build from upstream vedderb/vesc_tool@release_6.06.
+            Automated Nix flake build from upstream vedderb/vesc_tool@release_6_06.
             Note: Artifacts contain the flake output (no firmware bundling unless the flake includes it).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
