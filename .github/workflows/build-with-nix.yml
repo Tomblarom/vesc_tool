@@ -2,8 +2,8 @@ name: Build VESC Tool (Nix flake)
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: "0 3 * * *"   # daily; remove if you don't want automatic refresh
+  # schedule:
+  #   - cron: "0 3 * * *"   # daily; remove if you don't want automatic refresh
   push:
     branches: [ main, master, workflow-experiments ]
   pull_request:
