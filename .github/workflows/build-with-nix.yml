@@ -1,0 +1,133 @@
+name: Build VESC Tool (Nix flake)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 3 * * *"   # daily; remove if you don't want automatic refresh
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.os }} (Nix flake)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            system: x86_64-linux
+          # Uncomment if you want macOS builds too (requires flake support for aarch64-darwin)
+          # - os: macos-14
+          #   system: aarch64-darwin
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out upstream release_6.06
+        uses: actions/checkout@v4
+        with:
+          repository: vedderb/vesc_tool
+          ref: release_6.06
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v6
+
+      # Optional: make sure flake inputs are pinned/fetched up front
+      - name: Nix flake metadata
+        run: |
+          nix --version
+          nix flake metadata
+
+      # Build using flake.nix. We try a specific package name first, then fall back to defaultPackage.
+      - name: Build (nix flake)
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Try common output names in order:
+          candidates=(
+            ".#vesc_tool"
+            ".#defaultPackage.${{ matrix.system }}"
+            ".#packages.${{ matrix.system }}.default"
+            ".#default"
+            "."
+          )
+
+          built=""
+          for c in "${candidates[@]}"; do
+            echo "Trying: nix build $c"
+            if nix build "$c"; then
+              built="$c"
+              break
+            fi
+          done
+
+          if [[ -z "$built" ]]; then
+            echo "No buildable flake output found." >&2
+            exit 1
+          fi
+
+          echo "built_ref=$built" >> "$GITHUB_OUTPUT"
+
+      - name: Locate result & package it
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # 'nix build' creates 'result' (or result-#). Find the newest symlink.
+          RESULT_PATH="$(ls -dt result* | head -n1)"
+          echo "Result symlink: $RESULT_PATH"
+          realpath "$RESULT_PATH"
+
+          mkdir -p dist
+          if [[ "${{ matrix.os }}" == "ubuntu-22.04" ]]; then
+            OUT="vesc_tool_${{ matrix.system }}.tar.gz"
+            # Package everything in the output; many flakes expose bin/share etc.
+            tar -C "$RESULT_PATH" -czf "dist/$OUT" .
+            echo "Created dist/$OUT"
+          else
+            # macOS: create zip
+            OUT="vesc_tool_${{ matrix.system }}.zip"
+            (cd "$RESULT_PATH" && zip -r "../dist/$OUT" . >/dev/null)
+            echo "Created dist/$OUT"
+          fi
+
+          # Helpful README
+          cat > dist/README.txt <<'EOF'
+            This artifact was built with Nix (flake.nix) from vedderb/vesc_tool@release_6.06.
+            Contents are the flake's build output. If you see a 'bin/vesc_tool*' executable,
+            run it from the unpacked directory.
+            EOF
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vesc_tool_${{ matrix.system }}
+          path: dist/*
+
+  # Optional: publish a GitHub Release on tag with the Nix-built artifacts
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*.*
+          body: |
+            Automated Nix flake build from upstream vedderb/vesc_tool@release_6.06.
+            Note: Artifacts contain the flake output (no firmware bundling unless the flake includes it).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
