@@ -24,7 +24,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Check out upstream release_6.06
+      - name: Check out upstream release_6_06
         uses: actions/checkout@v4
         with:
           repository: vedderb/vesc_tool
