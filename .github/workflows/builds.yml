@@ -76,11 +76,11 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
-      - name: Set up Java 8
+      - name: Set up Java 17 for Android SDK tools
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: "8"
+          java-version: "17"
 
       - name: Install required Android SDK and NDK
         shell: bash
@@ -89,6 +89,12 @@ jobs:
             "platforms;${ANDROID_PLATFORM}" \
             "build-tools;33.0.2" \
             "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Set up Java 8 for the Qt 5 build
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "8"
 
       - name: Install Qt 5 for Android
         uses: jurplel/install-qt-action@v4
