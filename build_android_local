@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT must point to the Android SDK}"
+: "${ANDROID_NDK_ROOT:?ANDROID_NDK_ROOT must point to the Android NDK}"
+
+qt_bin="${QT_ROOT_DIR:-}/bin"
+qmake_command="${qt_bin}/qmake"
+androiddeployqt_command="${qt_bin}/androiddeployqt"
+
+if [[ ! -x "${qmake_command}" || ! -x "${androiddeployqt_command}" ]]; then
+    echo "Qt 5 for Android was not found under QT_ROOT_DIR." >&2
+    exit 1
+fi
+
+android_platform="${ANDROID_PLATFORM:-android-33}"
+output_name="${VESC_ANDROID_OUTPUT_NAME:-vesc_tool_test_android_$(date -u +%F).apk}"
+
+rm -rf build/android/build build/android/obj
+rm -f build/android/libvesc_tool*.so
+mkdir -p build/android
+
+"${qmake_command}" \
+    -config release \
+    "CONFIG += release_android build_mobile exclude_fw vt_test_version" \
+    ANDROID_ABIS="arm64-v8a" \
+    -spec android-clang
+
+make clean
+make -j"$(nproc)"
+make install INSTALL_ROOT=build/android/build
+
+"${androiddeployqt_command}" \
+    --gradle \
+    --no-gdbserver \
+    --output build/android/build \
+    --input android-vesc_tool-deployment-settings.json \
+    --android-platform "${android_platform}"
+
+apk_path="build/android/build/build/outputs/apk/debug/build-debug.apk"
+if [[ ! -f "${apk_path}" ]]; then
+    echo "Android build finished without producing ${apk_path}." >&2
+    exit 1
+fi
+
+mv "${apk_path}" "build/android/${output_name}"
+rm -rf build/android/build build/android/obj
+rm -f build/android/libvesc_tool*.so

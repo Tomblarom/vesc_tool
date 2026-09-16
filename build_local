@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+qt_root="${QT_ROOT_DIR:-}"
+if [[ -n "${qt_root}" ]] && command -v cygpath >/dev/null 2>&1; then
+    qt_root="$(cygpath -u "${qt_root}")"
+fi
+
+# Prefer the static MXE cross compiler used by local Linux builds. On a
+# Windows runner, use the Qt/MinGW tools installed in PATH instead.
+if command -v i686-w64-mingw32.static-qmake-qt5 >/dev/null 2>&1; then
+    qmake_command="i686-w64-mingw32.static-qmake-qt5"
+    make_command="make"
+    deploy_runtime=false
+elif [[ -n "${qt_root}" && -x "${qt_root}/bin/qmake.exe" ]] && \
+        command -v mingw32-make >/dev/null 2>&1; then
+    qmake_command="${qt_root}/bin/qmake.exe"
+    make_command="mingw32-make"
+    windeployqt_command="${qt_root}/bin/windeployqt.exe"
+    deploy_runtime=true
+else
+    echo "Qt 5 with MinGW or the MXE Qt 5 cross compiler was not found in PATH." >&2
+    exit 1
+fi
+
+"${qmake_command}" \
+    -config release \
+    "CONFIG += release_win build_original exclude_fw vt_test_version"
+
+"${make_command}" clean
+"${make_command}" -j"$(nproc)"
+
+rm -rf build/win/obj
+
+# The official Windows Qt package is dynamically linked. Bundle its runtime
+# libraries so the downloaded artifact works without a separate Qt install.
+if [[ "${deploy_runtime}" == true ]]; then
+    if [[ ! -x "${windeployqt_command}" ]]; then
+        echo "windeployqt was not found in the Qt installation." >&2
+        exit 1
+    fi
+    shopt -s nullglob
+    executables=(build/win/vesc_tool*.exe)
+    if ((${#executables[@]} != 1)); then
+        echo "Expected exactly one VESC Tool executable, found ${#executables[@]}." >&2
+        exit 1
+    fi
+    "${windeployqt_command}" --release --qmldir . "${executables[0]}"
+fi
