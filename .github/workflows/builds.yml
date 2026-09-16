@@ -85,7 +85,7 @@ jobs:
       - name: Install required Android SDK and NDK
         shell: bash
         run: |
-          sdkmanager \
+          "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" \
             "platforms;${ANDROID_PLATFORM}" \
             "build-tools;33.0.2" \
             "ndk;${ANDROID_NDK_VERSION}"
